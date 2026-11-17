@@ -69,7 +69,7 @@ def createConfig():
     ecpubkeyName = path+"/jwttool_custom_public_EC.pem"
     jwksName = path+"/jwttool_custom_jwks.json"
     proxyHost = "127.0.0.1"
-    config = configparser.ConfigParser(allow_no_value=True)
+    config = configparser.ConfigParser(allow_no_value=True, delimiters=('=',))
     config.optionxform = str
     config['crypto'] = {'pubkey': pubkeyName,
         'privkey': privKeyName,
@@ -374,10 +374,10 @@ def tamperToken(paylDict, headDict, sig):
             exit(1)
         if selection<len(headList) and selection>0:
             if isinstance(headDict[headList[selection]], dict):
-                cprintc("\nPlease select a sub-field number for the "+pair+" claim:\n(or 0 to Continue)", "white")
+                cprintc("\nPlease select a sub-field number for the "+str(headList[selection])+" claim:\n(or 0 to Continue)", "white")
                 newVal = OrderedDict()
                 for subclaim in headDict[headList[selection]]:
-                    newVal[subclaim] = headDict[pair][subclaim]
+                    newVal[subclaim] = headDict[headList[selection]][subclaim]
                 newVal = buildSubclaim(newVal, headList, selection)
                 headDict[headList[selection]] = newVal
             else:
@@ -605,6 +605,8 @@ def crackSig(sig, contents):
         cprintc(utf8errors, " UTF-8 incompatible passwords skipped", "cyan")
 
 def castInput(newInput):
+    if not isinstance(newInput, (str, bytes, bytearray)):
+        return newInput
     if "{" in str(newInput):
         try:
             jsonInput = json.loads(newInput)
@@ -1196,6 +1198,23 @@ def genContents(headDict, paylDict, newContents=""):
         newContents = base64.urlsafe_b64encode(json.dumps(headDict,separators=(",",":")).encode()).decode('UTF-8').strip("=")+"."+base64.urlsafe_b64encode(json.dumps(paylDict,separators=(",",":")).encode()).decode('UTF-8').strip("=")
     return newContents.encode().decode('UTF-8')
 
+def printSubclaims(claimDict, indent):
+    prefix = " "*indent+"[+] "
+    for subclaim in claimDict:
+        if isinstance(claimDict[subclaim], dict):
+            cprintc(prefix+subclaim+" = JSON object:", "green")
+            printSubclaims(claimDict[subclaim], indent+4)
+        elif type(claimDict[subclaim]) == str:
+            cprintc(prefix+subclaim+" = \""+str(claimDict[subclaim])+"\"", "green")
+        elif claimDict[subclaim] == None:
+            cprintc(prefix+subclaim+" = null", "green")
+        elif claimDict[subclaim] == True and not claimDict[subclaim] == 1:
+            cprintc(prefix+subclaim+" = true", "green")
+        elif claimDict[subclaim] == False and not claimDict[subclaim] == 0:
+            cprintc(prefix+subclaim+" = false", "green")
+        else:
+            cprintc(prefix+subclaim+" = "+str(claimDict[subclaim]), "green")
+
 def dissectPayl(paylDict, count=False):
     timeseen = 0
     comparestamps = []
@@ -1217,18 +1236,8 @@ def dissectPayl(paylDict, count=False):
             timeseen += 1
             comparestamps.append(claim)
         elif isinstance(paylDict[claim], dict):
-                cprintc("["+placeholder+"] "+claim+" = JSON object:", "green")
-                for subclaim in paylDict[claim]:
-                    if type(castInput(paylDict[claim][subclaim])) == str:
-                        cprintc("    [+] "+subclaim+" = \""+str(paylDict[claim][subclaim])+"\"", "green")
-                    elif paylDict[claim][subclaim] == None:
-                        cprintc("    [+] "+subclaim+" = null", "green")
-                    elif paylDict[claim][subclaim] == True and not paylDict[claim][subclaim] == 1:
-                        cprintc("    [+] "+subclaim+" = true", "green")
-                    elif paylDict[claim][subclaim] == False and not paylDict[claim][subclaim] == 0:
-                        cprintc("    [+] "+subclaim+" = false", "green")
-                    else:
-                        cprintc("    [+] "+subclaim+" = "+str(paylDict[claim][subclaim]), "green")
+            cprintc("["+placeholder+"] "+claim+" = JSON object:", "green")
+            printSubclaims(paylDict[claim], 4)
         else:
             if type(paylDict[claim]) == str:
                 cprintc("["+placeholder+"] "+claim+" = \""+str(paylDict[claim])+"\"", "green")
@@ -1924,7 +1933,7 @@ if __name__ == '__main__':
         path = sys.path[0]
     logFilename = path+"/logs.txt"
     configFileName = path+"/jwtconf.ini"
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(allow_no_value=True, delimiters=('=',))
     if (os.path.isfile(configFileName)):
         config.read(configFileName)
         print(configFileName)
@@ -2076,7 +2085,7 @@ if __name__ == '__main__':
         jwt = searchLog(args.query)
     elif args.jwt:
         jwt = args.jwt
-        cprintc("Original JWT: "+findJWT+"\n", "cyan")
+        cprintc("Original JWT: "+jwt+"\n", "cyan")
     elif findJWT:
         jwt = findJWT
         cprintc("Original JWT: "+findJWT+"\n", "cyan")
